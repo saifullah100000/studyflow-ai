@@ -3,9 +3,11 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
-import { NotesModule } from './notes/notes.module';
+import { DatabaseModule } from './database/database.module';
 import { GenerationsModule } from './generations/generations.module';
+import { NotesModule } from './notes/notes.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -13,11 +15,15 @@ import { GenerationsModule } from './generations/generations.module';
       isGlobal: true,
       cache: true,
     }),
+
+    PrismaModule,
+    DatabaseModule,
     AuthModule,
     UsersModule,
     NotesModule,
     GenerationsModule,
   ],
+
   controllers: [AppController],
   providers: [AppService],
 })

@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: studyflow-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: studyflow
+      POSTGRES_PASSWORD: studyflow_dev_password
+      POSTGRES_DB: studyflow_db
+
+    ports:
+      - "127.0.0.1:5434:5432"
+
+    volumes:
+      - studyflow_postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studyflow -d studyflow_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  studyflow_postgres_data:

@@ -58,3 +58,6 @@ docker-compose.override.yml
 *.pem
 *.key
 *.crt
+
+# Generated Prisma client
+backend/src/generated/prisma/
