@@ -1,3 +1,4 @@
+import ApiStatus from "../components/ApiStatus";
 const statistics = [
   {
     title: "Total Notes",
@@ -24,6 +25,8 @@ const statistics = [
 export default function DashboardPage() {
   return (
     <section>
+      <ApiStatus />
+
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-slate-900">
           Welcome to StudyFlow AI
