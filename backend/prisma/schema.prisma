@@ -20,6 +20,24 @@ enum GenerationStatus {
   FAILED
 }
 
+enum EducationLevel {
+  SCHOOL
+  COLLEGE
+  UNIVERSITY
+  PROFESSIONAL
+}
+
+enum GenerationLanguage {
+  ENGLISH
+  URDU
+}
+
+enum NotesLength {
+  SHORT
+  MEDIUM
+  LONG
+}
+
 enum QuizQuestionType {
   MULTIPLE_CHOICE
   TRUE_FALSE
@@ -108,9 +126,18 @@ model NoteSection {
 model GenerationJob {
   id           String           @id @default(uuid())
   topic        String
+  subject      String           @default("General")
   prompt       String?          @db.Text
   status       GenerationStatus @default(PENDING)
   errorMessage String?          @db.Text
+
+  educationLevel           EducationLevel     @default(UNIVERSITY)
+  language                 GenerationLanguage @default(ENGLISH)
+  notesLength              NotesLength        @default(MEDIUM)
+  numberOfMcqs             Int                @default(10)
+  numberOfFlashcards       Int                @default(10)
+  includePracticalExamples Boolean            @default(true)
+  sendToWhatsapp           Boolean            @default(false)
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
