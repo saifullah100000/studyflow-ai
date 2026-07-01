@@ -69,6 +69,7 @@ model GenerationJob {
   topic        String
   status       GenerationStatus @default(PENDING)
   errorMessage String?
+  whatsappDelivered Boolean @default(false)
 
   userId String @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)

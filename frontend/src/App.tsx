@@ -1,12 +1,12 @@
 import { Route, Routes } from "react-router";
+import ProtectedRoute from "./auth/ProtectedRoute";
 import AppLayout from "./layouts/AppLayout";
 import DashboardPage from "./pages/DashboardPage";
 import GenerateNotesPage from "./pages/GenerateNotesPage";
+import LoginPage from "./pages/LoginPage";
 import NotesPage from "./pages/NotesPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import RegisterPage from "./pages/RegisterPage";
-import ProtectedRoute from "./auth/ProtectedRoute";
-import LoginPage from "./pages/LoginPage";
 
 export default function App() {
   return (
@@ -14,7 +14,10 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route index element={<DashboardPage />} />
-          <Route path="generate" element={<GenerateNotesPage />} />
+          <Route
+            path="generate"
+            element={<GenerateNotesPage />}
+          />
           <Route path="notes" element={<NotesPage />} />
         </Route>
       </Route>

@@ -2,50 +2,60 @@ import { NavLink } from "react-router";
 
 const navigationItems = [
   {
-    name: "Dashboard",
     path: "/",
-    icon: "⌂",
+    label: "Dashboard",
+    end: true,
   },
   {
-    name: "Generate Notes",
     path: "/generate",
-    icon: "✦",
+    label: "Generate Notes",
+    end: false,
   },
   {
-    name: "My Notes",
     path: "/notes",
-    icon: "▤",
+    label: "My Notes",
+    end: false,
   },
 ];
 
 export default function Sidebar() {
   return (
-    <aside className="w-full border-b border-slate-800 bg-slate-950 px-4 py-4 text-white md:min-h-screen md:w-64 md:border-r md:border-b-0">
-      <div className="mb-7 px-3">
-        <p className="text-xl font-bold">StudyFlow</p>
-        <p className="text-xs text-slate-400">AI Learning Platform</p>
+    <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-slate-200 bg-white lg:flex">
+      <div className="border-b border-slate-200 px-6 py-6">
+        <p className="text-xl font-bold text-indigo-700">
+          StudyFlow AI
+        </p>
+
+        <p className="mt-1 text-xs text-slate-500">
+          Intelligent study assistant
+        </p>
       </div>
 
-      <nav className="flex gap-2 overflow-x-auto md:flex-col">
+      <nav className="flex-1 space-y-2 p-4">
         {navigationItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
-            end={item.path === "/"}
+            end={item.end}
             className={({ isActive }) =>
               [
-                "flex min-w-max items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition",
+                "block rounded-lg px-4 py-3 text-sm font-medium transition",
                 isActive
-                  ? "bg-indigo-600 text-white"
-                  : "text-slate-300 hover:bg-slate-800 hover:text-white",
+                  ? "bg-indigo-50 text-indigo-700"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
               ].join(" ")
             }
           >
-            <span aria-hidden="true">{item.icon}</span>
-            {item.name}
+            {item.label}
           </NavLink>
         ))}
       </nav>
+
+      <div className="border-t border-slate-200 p-5">
+        <p className="text-xs text-slate-400">
+          StudyFlow AI student workspace
+        </p>
+      </div>
     </aside>
   );
 }
