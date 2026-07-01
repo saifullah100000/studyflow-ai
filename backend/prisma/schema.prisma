@@ -8,15 +8,9 @@ datasource db {
   provider = "postgresql"
 }
 
-enum UserRole {
+enum Role {
   USER
   ADMIN
-}
-
-enum Difficulty {
-  BEGINNER
-  INTERMEDIATE
-  ADVANCED
 }
 
 enum GenerationStatus {
@@ -26,16 +20,42 @@ enum GenerationStatus {
   FAILED
 }
 
+enum QuizQuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
+}
+
+enum FileKind {
+  SOURCE
+  GENERATED_PDF
+  GENERATED_DOCX
+  OTHER
+}
+
+enum DeliveryChannel {
+  WHATSAPP
+  EMAIL
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+}
+
 model User {
-  id             String   @id @default(uuid()) @db.Uuid
-  name           String
-  email          String   @unique
-  passwordHash   String
-  whatsappNumber String?
-  role           UserRole @default(USER)
+  id           String @id @default(uuid())
+  name         String
+  email        String @unique
+  passwordHash String
+  role         Role   @default(USER)
 
   notes          Note[]
   generationJobs GenerationJob[]
+  files          File[]
+  deliveryLogs   DeliveryLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -44,38 +64,62 @@ model User {
 }
 
 model Note {
-  id         String     @id @default(uuid()) @db.Uuid
-  title      String
-  topic      String
-  subject    String?
-  language   String     @default("English")
-  difficulty Difficulty @default(BEGINNER)
-  content    Json?
+  id      String  @id @default(uuid())
+  title   String
+  topic   String?
+  summary String? @db.Text
+  content String? @db.Text
 
-  userId String @db.Uuid
+  userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  generationJob GenerationJob?
+  generationJobId String?        @unique
+  generationJob   GenerationJob? @relation(fields: [generationJobId], references: [id], onDelete: SetNull)
+
+  sections     NoteSection[]
+  flashcards   Flashcard[]
+  quizzes      Quiz[]
+  files        File[]
+  deliveryLogs DeliveryLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
-  @@index([createdAt])
+  @@index([userId, createdAt])
+}
+
+model NoteSection {
+  id       String @id @default(uuid())
+  heading  String
+  content  String @db.Text
+  position Int
+
+  noteId String
+  note   Note   @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([noteId, position])
+  @@index([noteId])
 }
 
 model GenerationJob {
-  id           String           @id @default(uuid()) @db.Uuid
+  id           String           @id @default(uuid())
   topic        String
+  prompt       String?          @db.Text
   status       GenerationStatus @default(PENDING)
-  errorMessage String?
-  whatsappDelivered Boolean @default(false)
+  errorMessage String?          @db.Text
 
-  userId String @db.Uuid
+  userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  noteId String? @unique @db.Uuid
-  note   Note?   @relation(fields: [noteId], references: [id], onDelete: SetNull)
+  inputFileId String?
+  inputFile   File?   @relation("GenerationInputFile", fields: [inputFileId], references: [id], onDelete: SetNull)
+
+  note         Note?
+  deliveryLogs DeliveryLog[]
 
   startedAt   DateTime?
   completedAt DateTime?
@@ -83,6 +127,113 @@ model GenerationJob {
   updatedAt   DateTime  @updatedAt
 
   @@index([userId])
-  @@index([status])
+  @@index([userId, status])
+  @@index([inputFileId])
   @@index([createdAt])
+}
+
+model Flashcard {
+  id       String @id @default(uuid())
+  front    String @db.Text
+  back     String @db.Text
+  position Int
+
+  noteId String
+  note   Note   @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([noteId, position])
+  @@index([noteId])
+}
+
+model Quiz {
+  id          String  @id @default(uuid())
+  title       String
+  description String? @db.Text
+  position    Int     @default(0)
+
+  noteId String
+  note   Note   @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  questions QuizQuestion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([noteId, position])
+  @@index([noteId])
+}
+
+model QuizQuestion {
+  id            String           @id @default(uuid())
+  question      String           @db.Text
+  type          QuizQuestionType @default(MULTIPLE_CHOICE)
+  options       String[]         @default([])
+  correctAnswer String           @db.Text
+  explanation   String?          @db.Text
+  position      Int
+
+  quizId String
+  quiz   Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([quizId, position])
+  @@index([quizId])
+}
+
+model File {
+  id           String   @id @default(uuid())
+  originalName String
+  storageKey   String   @unique
+  mimeType     String
+  sizeBytes    Int
+  kind         FileKind @default(SOURCE)
+  publicUrl    String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  noteId String?
+  note   Note?   @relation(fields: [noteId], references: [id], onDelete: SetNull)
+
+  inputForJobs GenerationJob[] @relation("GenerationInputFile")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([noteId])
+}
+
+model DeliveryLog {
+  id                String          @id @default(uuid())
+  channel           DeliveryChannel @default(WHATSAPP)
+  status            DeliveryStatus  @default(PENDING)
+  recipient         String
+  providerMessageId String?
+  errorMessage      String?         @db.Text
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  noteId String?
+  note   Note?   @relation(fields: [noteId], references: [id], onDelete: SetNull)
+
+  generationJobId String?
+  generationJob   GenerationJob? @relation(fields: [generationJobId], references: [id], onDelete: SetNull)
+
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([userId, channel, status])
+  @@index([noteId])
+  @@index([generationJobId])
+  @@index([providerMessageId])
 }

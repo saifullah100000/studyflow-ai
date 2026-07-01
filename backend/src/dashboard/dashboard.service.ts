@@ -39,10 +39,11 @@ export class DashboardService {
         },
       }),
 
-      this.prisma.generationJob.count({
+      this.prisma.deliveryLog.count({
         where: {
           userId,
-          whatsappDelivered: true,
+          channel: 'WHATSAPP',
+          status: 'DELIVERED',
         },
       }),
     ]);
