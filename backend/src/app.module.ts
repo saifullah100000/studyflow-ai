@@ -8,6 +8,7 @@ import { GenerationsModule } from './generations/generations.module';
 import { NotesModule } from './notes/notes.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
+import { ProfileModule } from './profile/profile.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     NotesModule,
     GenerationsModule,
+    ProfileModule,
   ],
 
   controllers: [AppController],

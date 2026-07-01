@@ -2,26 +2,21 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
-
-  app.enableShutdownHooks();
-
   const configService = app.get(ConfigService);
 
-  const port = Number(configService.get<string>('PORT') ?? 3000);
-  const apiPrefix = configService.get<string>('API_PREFIX') ?? 'api';
-  const frontendUrl =
-    configService.get<string>('FRONTEND_URL') ?? 'http://localhost:5173';
-
-  app.setGlobalPrefix(apiPrefix);
+  app.use(cookieParser());
 
   app.enableCors({
-    origin: frontendUrl,
-    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    origin:
+      configService.get<string>('FRONTEND_URL') ?? 'http://localhost:5173',
     credentials: true,
   });
+
+  app.setGlobalPrefix('api');
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -31,9 +26,9 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  await app.listen(port);
+  app.enableShutdownHooks();
 
-  console.log(`StudyFlow API running at http://localhost:${port}/${apiPrefix}`);
+  await app.listen(process.env.PORT ?? 3000);
 }
 
 void bootstrap();

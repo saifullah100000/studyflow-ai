@@ -5,16 +5,22 @@ import GenerateNotesPage from "./pages/GenerateNotesPage";
 import NotesPage from "./pages/NotesPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import RegisterPage from "./pages/RegisterPage";
+import ProtectedRoute from "./auth/ProtectedRoute";
+import LoginPage from "./pages/LoginPage";
 
 export default function App() {
   return (
     <Routes>
-      <Route element={<AppLayout />}>
-        <Route index element={<DashboardPage />} />
-        <Route path="generate" element={<GenerateNotesPage />} />
-        <Route path="notes" element={<NotesPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+      <Route element={<ProtectedRoute />}>
+        <Route element={<AppLayout />}>
+          <Route index element={<DashboardPage />} />
+          <Route path="generate" element={<GenerateNotesPage />} />
+          <Route path="notes" element={<NotesPage />} />
+        </Route>
       </Route>
+
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
 
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
