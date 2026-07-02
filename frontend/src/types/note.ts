@@ -85,6 +85,8 @@ export interface NoteDetails {
   id: string;
   title: string;
   topic: string | null;
+  introduction: string | null;
+  learningObjectives: string[];
   summary: string | null;
   content: string | null;
   userId: string;

@@ -60,6 +60,7 @@ export class GenerationsService {
         status: 'PENDING',
         userId,
       },
+
       select: {
         id: true,
       },
@@ -70,6 +71,7 @@ export class GenerationsService {
         where: {
           id: job.id,
         },
+
         data: {
           status: 'PROCESSING',
           startedAt: new Date(),
@@ -87,8 +89,14 @@ export class GenerationsService {
           data: {
             title: generatedNotes.title,
             topic: createGenerationDto.subject,
+            introduction: generatedNotes.introduction,
+            learningObjectives: generatedNotes.learningObjectives,
             summary: generatedNotes.summary,
-            content: generatedNotes.content,
+
+            // Manual notes may still use content.
+            // Generated notes use the dedicated introduction field.
+            content: null,
+
             userId,
             generationJobId: job.id,
 
@@ -114,25 +122,23 @@ export class GenerationsService {
                 }
               : {}),
 
-            ...(generatedNotes.quiz.questions.length > 0
+            ...(generatedNotes.mcqs.length > 0
               ? {
                   quizzes: {
                     create: {
-                      title: generatedNotes.quiz.title,
-                      description: generatedNotes.quiz.description,
+                      title: `${generatedNotes.title} Quiz`,
+                      description: `Assessment questions for ${generatedNotes.title}`,
                       position: 0,
 
                       questions: {
-                        create: generatedNotes.quiz.questions.map(
-                          (question, index) => ({
-                            question: question.question,
-                            type: 'MULTIPLE_CHOICE',
-                            options: question.options,
-                            correctAnswer: question.correctAnswer,
-                            explanation: question.explanation,
-                            position: index,
-                          }),
-                        ),
+                        create: generatedNotes.mcqs.map((mcq, index) => ({
+                          question: mcq.question,
+                          type: 'MULTIPLE_CHOICE',
+                          options: mcq.options,
+                          correctAnswer: mcq.correctAnswer,
+                          explanation: mcq.explanation,
+                          position: index,
+                        })),
                       },
                     },
                   },
@@ -157,6 +163,7 @@ export class GenerationsService {
               orderBy: {
                 position: 'asc',
               },
+
               include: {
                 questions: {
                   orderBy: {
@@ -172,11 +179,13 @@ export class GenerationsService {
           where: {
             id: job.id,
           },
+
           data: {
             status: 'COMPLETED',
             completedAt: new Date(),
             errorMessage: null,
           },
+
           select: publicGenerationJobSelect,
         });
 
@@ -188,11 +197,13 @@ export class GenerationsService {
 
       return {
         message: 'Study notes generated successfully',
+
+        structuredOutput: generatedNotes,
+
         ...result,
       };
     } catch (error: unknown) {
       await this.markJobAsFailed(job.id, error);
-
       throw error;
     }
   }
@@ -205,6 +216,7 @@ export class GenerationsService {
         where: {
           id: jobId,
         },
+
         data: {
           status: 'FAILED',
           errorMessage,
@@ -243,6 +255,13 @@ export class GenerationsService {
 
         if (typeof message === 'string') {
           return message.slice(0, 1000);
+        }
+
+        if (Array.isArray(message)) {
+          return message
+            .filter((item): item is string => typeof item === 'string')
+            .join(', ')
+            .slice(0, 1000);
         }
       }
     }

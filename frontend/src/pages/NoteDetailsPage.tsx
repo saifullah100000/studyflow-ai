@@ -165,6 +165,31 @@ export default function NoteDetailsPage() {
     }
   }
 
+  if (!id) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-10 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-xl font-bold text-red-700">
+          !
+        </div>
+
+        <h1 className="mt-5 text-xl font-bold text-red-900">
+          Unable to open note
+        </h1>
+
+        <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-red-700">
+          A note ID was not provided.
+        </p>
+
+        <Link
+          to="/notes"
+          className="mt-6 inline-flex rounded-lg bg-red-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-red-800"
+        >
+          Return to notes
+        </Link>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return <NoteDetailsSkeleton />;
   }
@@ -243,10 +268,52 @@ export default function NoteDetailsPage() {
         </h1>
 
         <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-500">
-          <span>Created {formatDate(note.createdAt)}</span>
-          <span>Updated {formatDate(note.updatedAt)}</span>
+          <span>
+            Created {formatDate(note.createdAt)}
+          </span>
+
+          <span>
+            Updated {formatDate(note.updatedAt)}
+          </span>
         </div>
       </header>
+
+      {note.learningObjectives.length > 0 && (
+        <article className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <h2 className="text-xl font-bold text-slate-900">
+            Learning objectives
+          </h2>
+
+          <ul className="mt-4 space-y-3">
+            {note.learningObjectives.map(
+              (objective, index) => (
+                <li
+                  key={`${index}-${objective}`}
+                  className="flex items-start gap-3 text-sm leading-6 text-slate-700"
+                >
+                  <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
+                    {index + 1}
+                  </span>
+
+                  <span>{objective}</span>
+                </li>
+              ),
+            )}
+          </ul>
+        </article>
+      )}
+
+      {note.introduction && (
+        <article className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <h2 className="text-xl font-bold text-slate-900">
+            Introduction
+          </h2>
+
+          <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">
+            {note.introduction}
+          </p>
+        </article>
+      )}
 
       {note.summary && (
         <article className="mt-6 rounded-2xl border border-indigo-100 bg-indigo-50 p-6">
@@ -295,7 +362,7 @@ export default function NoteDetailsPage() {
                     {index + 1}
                   </span>
 
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <h3 className="text-xl font-bold text-slate-900">
                       {section.heading}
                     </h3>
@@ -337,7 +404,7 @@ export default function NoteDetailsPage() {
                   Back
                 </p>
 
-                <p className="mt-2 text-sm leading-6 text-slate-700">
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
                   {flashcard.back}
                 </p>
               </article>
@@ -369,50 +436,58 @@ export default function NoteDetailsPage() {
                 )}
 
                 <div className="mt-6 space-y-6">
-                  {quiz.questions.map((question, index) => (
-                    <section
-                      key={question.id}
-                      className="rounded-xl bg-slate-50 p-5"
-                    >
-                      <p className="font-semibold text-slate-900">
-                        {index + 1}. {question.question}
-                      </p>
-
-                      {question.options.length > 0 && (
-                        <ul className="mt-3 space-y-2">
-                          {question.options.map(
-                            (option, optionIndex) => (
-                              <li
-                                key={`${question.id}-${optionIndex}`}
-                                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700"
-                              >
-                                {String.fromCharCode(
-                                  65 + optionIndex,
-                                )}
-                                . {option}
-                              </li>
-                            ),
-                          )}
-                        </ul>
-                      )}
-
-                      <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-green-700">
-                          Correct answer
+                  {quiz.questions.map(
+                    (question, index) => (
+                      <section
+                        key={question.id}
+                        className="rounded-xl bg-slate-50 p-5"
+                      >
+                        <p className="font-semibold text-slate-900">
+                          {index + 1}.{" "}
+                          {question.question}
                         </p>
 
-                        <p className="mt-1 text-sm font-medium text-green-900">
-                          {question.correctAnswer}
-                        </p>
-
-                        {question.explanation && (
-                          <p className="mt-2 text-sm leading-6 text-green-800">
-                            {question.explanation}
-                          </p>
+                        {question.options.length > 0 && (
+                          <ul className="mt-3 space-y-2">
+                            {question.options.map(
+                              (
+                                option,
+                                optionIndex,
+                              ) => (
+                                <li
+                                  key={`${question.id}-${optionIndex}`}
+                                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700"
+                                >
+                                  {String.fromCharCode(
+                                    65 + optionIndex,
+                                  )}
+                                  . {option}
+                                </li>
+                              ),
+                            )}
+                          </ul>
                         )}
-                      </div>
-                    </section>
-                  ))}
+
+                        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-green-700">
+                            Correct answer
+                          </p>
+
+                          <p className="mt-1 text-sm font-medium text-green-900">
+                            {question.correctAnswer}
+                          </p>
+
+                          {question.explanation && (
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-green-800">
+                              {
+                                question.explanation
+                              }
+                            </p>
+                          )}
+                        </div>
+                      </section>
+                    ),
+                  )}
                 </div>
               </article>
             ))}
@@ -460,7 +535,9 @@ export default function NoteDetailsPage() {
       )}
 
       {!note.content &&
+        !note.introduction &&
         !note.summary &&
+        note.learningObjectives.length === 0 &&
         note.sections.length === 0 &&
         note.flashcards.length === 0 &&
         note.quizzes.length === 0 && (
@@ -470,8 +547,9 @@ export default function NoteDetailsPage() {
             </h2>
 
             <p className="mt-2 text-sm text-slate-500">
-              Note content, sections, flashcards and quizzes will
-              appear here.
+              Introduction, learning objectives, content,
+              sections, flashcards and quizzes will appear
+              here.
             </p>
           </div>
         )}

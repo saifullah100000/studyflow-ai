@@ -82,11 +82,13 @@ model User {
 }
 
 model Note {
-  id      String  @id @default(uuid())
-  title   String
-  topic   String?
-  summary String? @db.Text
-  content String? @db.Text
+  id                 String   @id @default(uuid())
+  title              String
+  topic              String?
+  introduction       String?  @db.Text
+  learningObjectives String[] @default([])
+  summary            String?  @db.Text
+  content            String?  @db.Text
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)

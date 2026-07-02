@@ -11,10 +11,17 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
 import {
   buildStudyNotesJsonSchema,
-  generatedStudyNotesSchema,
+  createGeneratedStudyNotesSchema,
   type GeneratedStudyNotes,
 } from './schemas/study-notes.schema';
 import type { StudyNotesGenerationInput } from './study-notes.types';
+
+class StructuredOutputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StructuredOutputError';
+  }
+}
 
 class GeminiTimeoutError extends Error {
   constructor() {
@@ -29,155 +36,216 @@ export class AiService {
   private readonly client: GoogleGenAI;
   private readonly model: string;
   private readonly timeoutMs: number;
+  private readonly maxAttempts: number;
+  private readonly retryBaseDelayMs: number;
 
   constructor(private readonly configService: ConfigService) {
-    const apiKey = this.configService.getOrThrow<string>('GEMINI_API_KEY');
+    this.client = new GoogleGenAI({
+      apiKey: this.configService.getOrThrow<string>('GEMINI_API_KEY'),
+    });
 
     this.model =
       this.configService.get<string>('GEMINI_MODEL') ?? 'gemini-3.5-flash';
 
-    const configuredTimeout = Number(
-      this.configService.get<string>('GEMINI_TIMEOUT_MS') ?? 120000,
+    this.timeoutMs = this.readPositiveInteger(
+      'GEMINI_TIMEOUT_MS',
+      120000,
+      1000,
+      300000,
     );
 
-    this.timeoutMs =
-      Number.isFinite(configuredTimeout) && configuredTimeout >= 1000
-        ? configuredTimeout
-        : 120000;
+    this.maxAttempts = this.readPositiveInteger('GEMINI_MAX_ATTEMPTS', 3, 1, 5);
 
-    this.client = new GoogleGenAI({
-      apiKey,
-    });
+    this.retryBaseDelayMs = this.readPositiveInteger(
+      'GEMINI_RETRY_BASE_DELAY_MS',
+      800,
+      100,
+      10000,
+    );
   }
 
   buildStudyNotesPrompt(input: StudyNotesGenerationInput): string {
     const language = input.language === 'URDU' ? 'Urdu' : 'English';
 
-    const lengthInstruction: Record<
+    const lengthInstructions: Record<
       StudyNotesGenerationInput['notesLength'],
       string
     > = {
-      SHORT: 'Keep the notes concise and focused on the essential concepts.',
+      SHORT: 'Create concise notes focused on essential concepts.',
       MEDIUM: 'Create moderately detailed notes with clear explanations.',
-      LONG: 'Create comprehensive and detailed notes covering the topic thoroughly.',
+      LONG: 'Create comprehensive notes covering the topic thoroughly.',
     };
 
-    const practicalExamplesInstruction = input.includePracticalExamples
-      ? 'Include practical, real-world examples wherever useful.'
-      : 'Do not add unnecessary practical examples.';
+    const examplesInstruction = input.includePracticalExamples
+      ? 'Include practical and real-world examples in relevant sections.'
+      : 'Do not include unnecessary practical examples.';
 
     return [
-      'You are StudyFlow AI, an educational content generator.',
+      'You are StudyFlow AI, an educational notes generator.',
       '',
-      `Create accurate study notes about: ${input.topic}`,
+      `Topic: ${input.topic}`,
       `Subject: ${input.subject}`,
       `Education level: ${input.educationLevel.toLowerCase()}`,
-      `Output language: ${language}`,
+      `Language: ${language}`,
       '',
-      lengthInstruction[input.notesLength],
-      practicalExamplesInstruction,
+      lengthInstructions[input.notesLength],
+      examplesInstruction,
       '',
-      'Requirements:',
-      '- Use clear headings and logically ordered sections.',
-      '- Explain difficult terminology in student-friendly language.',
-      '- Keep the content appropriate for the selected education level.',
-      `- Generate exactly ${input.numberOfFlashcards} flashcards.`,
-      `- Generate exactly ${input.numberOfMcqs} multiple-choice questions.`,
-      '- Each MCQ must have exactly four options.',
-      '- The correctAnswer must exactly match one option.',
-      '- Every MCQ must include a brief explanation.',
-      '- Avoid invented references, statistics or citations.',
-      '- Follow the supplied response schema.',
+      'Required quality rules:',
+      '- Use accurate, student-friendly explanations.',
+      '- Organize sections in a logical learning order.',
+      '- Return between 3 and 8 learning objectives.',
+      `- Return exactly ${input.numberOfMcqs} MCQs.`,
+      `- Return exactly ${input.numberOfFlashcards} flashcards.`,
+      '- Each MCQ must have exactly four unique options.',
+      '- correctAnswer must exactly match one option.',
+      '- Each MCQ must include an explanation.',
+      '- Avoid unsupported citations and invented statistics.',
+      '- Return only the structured response requested by the schema.',
     ].join('\n');
   }
 
   async generateStudyNotes(
     input: StudyNotesGenerationInput,
-    prompt = this.buildStudyNotesPrompt(input),
+    basePrompt = this.buildStudyNotesPrompt(input),
   ): Promise<GeneratedStudyNotes> {
-    try {
-      const interaction = await this.withTimeout(
-        this.client.interactions.create({
-          model: this.model,
-          input: prompt,
-          response_format: {
-            type: 'text',
-            mime_type: 'application/json',
-            schema: buildStudyNotesJsonSchema(
-              input.numberOfMcqs,
-              input.numberOfFlashcards,
-            ),
-          },
-        }),
-      );
+    let lastError: unknown = new Error('AI generation failed');
 
-      const outputText = interaction.output_text;
-
-      if (typeof outputText !== 'string' || outputText.trim().length === 0) {
-        throw new BadGatewayException('Gemini returned an empty response');
-      }
-
-      let parsedJson: unknown;
-
+    for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
       try {
-        parsedJson = JSON.parse(outputText);
-      } catch {
-        this.logger.error(
-          'Gemini returned content that could not be parsed as JSON',
+        return await this.requestStructuredNotes(input, basePrompt, attempt);
+      } catch (error: unknown) {
+        lastError = error;
+
+        const canRetry =
+          this.isRetryableError(error) && attempt < this.maxAttempts;
+
+        if (!canRetry) {
+          break;
+        }
+
+        const delayMs = this.calculateRetryDelay(attempt);
+
+        this.logger.warn(
+          `Gemini attempt ${attempt} failed. Retrying in ${delayMs}ms.`,
         );
 
-        throw new BadGatewayException('Gemini returned invalid JSON');
+        await this.delay(delayMs);
       }
-
-      const result = generatedStudyNotesSchema.safeParse(parsedJson);
-
-      if (!result.success) {
-        this.logger.error(
-          `Gemini schema validation failed: ${JSON.stringify(
-            result.error.issues,
-          )}`,
-        );
-
-        throw new BadGatewayException(
-          'Gemini returned an invalid notes structure',
-        );
-      }
-
-      this.validateGeneratedCounts(result.data, input);
-      this.validateCorrectAnswers(result.data);
-
-      return result.data;
-    } catch (error: unknown) {
-      this.handleGeminiError(error);
     }
+
+    this.throwFinalError(lastError);
   }
 
-  private validateGeneratedCounts(
-    notes: GeneratedStudyNotes,
+  private async requestStructuredNotes(
     input: StudyNotesGenerationInput,
-  ): void {
-    if (notes.flashcards.length !== input.numberOfFlashcards) {
-      throw new BadGatewayException(
-        'Gemini returned an incorrect number of flashcards',
-      );
-    }
+    basePrompt: string,
+    attempt: number,
+  ): Promise<GeneratedStudyNotes> {
+    const retryInstruction =
+      attempt === 1
+        ? ''
+        : [
+            '',
+            'IMPORTANT RETRY INSTRUCTION:',
+            'The previous response failed validation.',
+            'Return every required property with the exact requested counts.',
+            'Return no Markdown, explanations or text outside the JSON response.',
+          ].join('\n');
 
-    if (notes.quiz.questions.length !== input.numberOfMcqs) {
-      throw new BadGatewayException(
-        'Gemini returned an incorrect number of MCQs',
-      );
-    }
-  }
+    const interaction = await this.withTimeout(
+      this.client.interactions.create({
+        model: this.model,
+        input: `${basePrompt}${retryInstruction}`,
 
-  private validateCorrectAnswers(notes: GeneratedStudyNotes): void {
-    const invalidQuestion = notes.quiz.questions.find(
-      (question) => !question.options.includes(question.correctAnswer),
+        generation_config: {
+          thinking_level: 'minimal',
+          thinking_summaries: 'none',
+          temperature: 0.2,
+          max_output_tokens: this.getMaxOutputTokens(input.notesLength),
+        },
+
+        response_format: {
+          type: 'text',
+          mime_type: 'application/json',
+
+          schema: buildStudyNotesJsonSchema(
+            input.numberOfMcqs,
+            input.numberOfFlashcards,
+          ),
+        },
+      }),
     );
 
-    if (invalidQuestion) {
-      throw new BadGatewayException(
-        'Gemini returned an MCQ with an invalid correct answer',
+    const outputText = interaction.output_text;
+
+    if (typeof outputText !== 'string' || outputText.trim().length === 0) {
+      throw new StructuredOutputError('Gemini returned an empty response');
+    }
+
+    let parsedResponse: unknown;
+
+    try {
+      parsedResponse = JSON.parse(outputText);
+    } catch {
+      throw new StructuredOutputError('Gemini returned malformed JSON');
+    }
+
+    const schema = createGeneratedStudyNotesSchema(
+      input.numberOfMcqs,
+      input.numberOfFlashcards,
+    );
+
+    const validationResult = schema.safeParse(parsedResponse);
+
+    if (!validationResult.success) {
+      this.logger.warn(
+        `Structured output validation failed: ${JSON.stringify(
+          validationResult.error.issues,
+        )}`,
       );
+
+      throw new StructuredOutputError(
+        'Gemini returned an invalid response structure',
+      );
+    }
+
+    return validationResult.data;
+  }
+
+  private isRetryableError(error: unknown): boolean {
+    if (
+      error instanceof StructuredOutputError ||
+      error instanceof GeminiTimeoutError
+    ) {
+      return true;
+    }
+
+    const status = this.getProviderStatus(error);
+
+    return status === 429 || status === 500 || status === 503 || status === 504;
+  }
+
+  private calculateRetryDelay(attempt: number): number {
+    const exponentialDelay = this.retryBaseDelayMs * 2 ** (attempt - 1);
+
+    const randomJitter = Math.floor(Math.random() * 250);
+
+    return exponentialDelay + randomJitter;
+  }
+
+  private getMaxOutputTokens(
+    notesLength: StudyNotesGenerationInput['notesLength'],
+  ): number {
+    switch (notesLength) {
+      case 'SHORT':
+        return 6000;
+
+      case 'MEDIUM':
+        return 10000;
+
+      case 'LONG':
+        return 16000;
     }
   }
 
@@ -199,26 +267,20 @@ export class AiService {
     }
   }
 
-  private handleGeminiError(error: unknown): never {
-    if (error instanceof HttpException) {
-      throw error;
+  private throwFinalError(error: unknown): never {
+    if (error instanceof StructuredOutputError) {
+      throw new BadGatewayException(
+        'Gemini could not produce a valid structured response',
+      );
     }
 
     if (error instanceof GeminiTimeoutError) {
-      this.logger.error(`Gemini request exceeded ${this.timeoutMs}ms`);
-
       throw new GatewayTimeoutException(
         'AI generation took too long. Please try again.',
       );
     }
 
     const status = this.getProviderStatus(error);
-
-    this.logger.error(
-      `Gemini request failed${
-        status ? ` with status ${status}` : ''
-      }: ${this.getErrorMessage(error)}`,
-    );
 
     if (status === 401 || status === 403) {
       throw new ServiceUnavailableException(
@@ -230,6 +292,12 @@ export class AiService {
       throw new HttpException(
         'Gemini rate limit reached. Please try again shortly.',
         HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    if (status === 504) {
+      throw new GatewayTimeoutException(
+        'Gemini could not complete the request in time',
       );
     }
 
@@ -253,25 +321,73 @@ export class AiService {
 
     const errorRecord = error as Record<string, unknown>;
 
-    const possibleStatus =
-      errorRecord.status ?? errorRecord.statusCode ?? errorRecord.code;
+    const nestedError =
+      typeof errorRecord.error === 'object' && errorRecord.error !== null
+        ? (errorRecord.error as Record<string, unknown>)
+        : undefined;
 
-    if (typeof possibleStatus === 'number') {
-      return possibleStatus;
-    }
+    const possibleStatuses = [
+      errorRecord.status,
+      errorRecord.statusCode,
+      errorRecord.code,
+      nestedError?.status,
+      nestedError?.code,
+    ];
 
-    if (typeof possibleStatus === 'string' && /^\d+$/.test(possibleStatus)) {
-      return Number(possibleStatus);
+    for (const possibleStatus of possibleStatuses) {
+      if (typeof possibleStatus === 'number') {
+        return possibleStatus;
+      }
+
+      if (typeof possibleStatus === 'string' && /^\d+$/.test(possibleStatus)) {
+        return Number(possibleStatus);
+      }
+
+      if (typeof possibleStatus === 'string') {
+        const statusMap: Record<string, number> = {
+          INVALID_ARGUMENT: 400,
+          PERMISSION_DENIED: 403,
+          RESOURCE_EXHAUSTED: 429,
+          INTERNAL: 500,
+          UNAVAILABLE: 503,
+          DEADLINE_EXCEEDED: 504,
+        };
+
+        const mappedStatus = statusMap[possibleStatus.toUpperCase()];
+
+        if (mappedStatus) {
+          return mappedStatus;
+        }
+      }
     }
 
     return undefined;
   }
 
-  private getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-      return error.message;
+  private readPositiveInteger(
+    environmentVariable: string,
+    fallback: number,
+    minimum: number,
+    maximum: number,
+  ): number {
+    const configuredValue = Number(
+      this.configService.get<string>(environmentVariable) ?? fallback,
+    );
+
+    if (
+      !Number.isInteger(configuredValue) ||
+      configuredValue < minimum ||
+      configuredValue > maximum
+    ) {
+      return fallback;
     }
 
-    return 'Unknown Gemini error';
+    return configuredValue;
+  }
+
+  private delay(milliseconds: number): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, milliseconds);
+    });
   }
 }
