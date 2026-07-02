@@ -1,6 +1,8 @@
 import { HttpException, Injectable, Logger } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { AiService } from '../ai/ai.service';
 import type { StudyNotesGenerationInput } from '../ai/study-notes.types';
+import { N8nService } from '../n8n/n8n.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateGenerationDto } from './dto/create-generation.dto';
 
@@ -29,6 +31,7 @@ export class GenerationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiService: AiService,
+    private readonly n8nService: N8nService,
   ) {}
 
   async create(userId: string, createGenerationDto: CreateGenerationDto) {
@@ -67,6 +70,27 @@ export class GenerationsService {
     });
 
     try {
+      const automation = await this.n8nService.sendGenerationRequest({
+        event: 'generation.requested',
+        requestId: randomUUID(),
+        occurredAt: new Date().toISOString(),
+        jobId: job.id,
+        userId,
+
+        generation: {
+          topic: createGenerationDto.topic,
+          subject: createGenerationDto.subject,
+          educationLevel: createGenerationDto.educationLevel,
+          language: createGenerationDto.language,
+          notesLength: createGenerationDto.notesLength,
+          numberOfMcqs: createGenerationDto.numberOfMcqs,
+          numberOfFlashcards: createGenerationDto.numberOfFlashcards,
+          includePracticalExamples:
+            createGenerationDto.includePracticalExamples,
+          sendToWhatsapp: createGenerationDto.sendToWhatsapp,
+        },
+      });
+
       await this.prisma.generationJob.update({
         where: {
           id: job.id,
@@ -197,6 +221,8 @@ export class GenerationsService {
 
       return {
         message: 'Study notes generated successfully',
+
+        automation,
 
         structuredOutput: generatedNotes,
 

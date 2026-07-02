@@ -10,7 +10,7 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
 import { CreateGenerationDto } from './dto/create-generation.dto';
-import { GenerationsService } from './generations.service.js';
+import { GenerationsService } from './generations.service';
 @Controller('generations')
 @UseGuards(JwtAuthGuard)
 export class GenerationsController {
