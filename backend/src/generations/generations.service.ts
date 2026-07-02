@@ -1,28 +1,13 @@
-import { HttpException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadGatewayException,
+  HttpException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { AiService } from '../ai/ai.service';
-import type { StudyNotesGenerationInput } from '../ai/study-notes.types';
 import { N8nService } from '../n8n/n8n.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateGenerationDto } from './dto/create-generation.dto';
-
-const publicGenerationJobSelect = {
-  id: true,
-  topic: true,
-  subject: true,
-  educationLevel: true,
-  language: true,
-  notesLength: true,
-  numberOfMcqs: true,
-  numberOfFlashcards: true,
-  includePracticalExamples: true,
-  sendToWhatsapp: true,
-  status: true,
-  startedAt: true,
-  completedAt: true,
-  createdAt: true,
-  updatedAt: true,
-} as const;
 
 @Injectable()
 export class GenerationsService {
@@ -30,23 +15,11 @@ export class GenerationsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly aiService: AiService,
     private readonly n8nService: N8nService,
   ) {}
 
   async create(userId: string, createGenerationDto: CreateGenerationDto) {
-    const aiInput: StudyNotesGenerationInput = {
-      topic: createGenerationDto.topic,
-      subject: createGenerationDto.subject,
-      educationLevel: createGenerationDto.educationLevel,
-      language: createGenerationDto.language,
-      notesLength: createGenerationDto.notesLength,
-      numberOfMcqs: createGenerationDto.numberOfMcqs,
-      numberOfFlashcards: createGenerationDto.numberOfFlashcards,
-      includePracticalExamples: createGenerationDto.includePracticalExamples,
-    };
-
-    const prompt = this.aiService.buildStudyNotesPrompt(aiInput);
+    const requestId = randomUUID();
 
     const job = await this.prisma.generationJob.create({
       data: {
@@ -59,11 +32,11 @@ export class GenerationsService {
         numberOfFlashcards: createGenerationDto.numberOfFlashcards,
         includePracticalExamples: createGenerationDto.includePracticalExamples,
         sendToWhatsapp: createGenerationDto.sendToWhatsapp,
-        prompt,
         status: 'PENDING',
         userId,
+        automationRequestId: requestId,
+        prompt: this.buildPromptSummary(createGenerationDto),
       },
-
       select: {
         id: true,
       },
@@ -72,7 +45,7 @@ export class GenerationsService {
     try {
       const automation = await this.n8nService.sendGenerationRequest({
         event: 'generation.requested',
-        requestId: randomUUID(),
+        requestId,
         occurredAt: new Date().toISOString(),
         jobId: job.id,
         userId,
@@ -91,207 +64,114 @@ export class GenerationsService {
         },
       });
 
-      await this.prisma.generationJob.update({
+      const completedJob = await this.prisma.generationJob.findFirst({
         where: {
           id: job.id,
+          userId,
         },
-
-        data: {
-          status: 'PROCESSING',
-          startedAt: new Date(),
-          errorMessage: null,
+        include: {
+          note: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
         },
       });
 
-      const generatedNotes = await this.aiService.generateStudyNotes(
-        aiInput,
-        prompt,
-      );
-
-      const result = await this.prisma.$transaction(async (transaction) => {
-        const note = await transaction.note.create({
-          data: {
-            title: generatedNotes.title,
-            topic: createGenerationDto.subject,
-            introduction: generatedNotes.introduction,
-            learningObjectives: generatedNotes.learningObjectives,
-            summary: generatedNotes.summary,
-
-            // Manual notes may still use content.
-            // Generated notes use the dedicated introduction field.
-            content: null,
-
-            userId,
-            generationJobId: job.id,
-
-            sections: {
-              create: generatedNotes.sections.map((section, index) => ({
-                heading: section.heading,
-                content: section.content,
-                position: index,
-              })),
-            },
-
-            ...(generatedNotes.flashcards.length > 0
-              ? {
-                  flashcards: {
-                    create: generatedNotes.flashcards.map(
-                      (flashcard, index) => ({
-                        front: flashcard.front,
-                        back: flashcard.back,
-                        position: index,
-                      }),
-                    ),
-                  },
-                }
-              : {}),
-
-            ...(generatedNotes.mcqs.length > 0
-              ? {
-                  quizzes: {
-                    create: {
-                      title: `${generatedNotes.title} Quiz`,
-                      description: `Assessment questions for ${generatedNotes.title}`,
-                      position: 0,
-
-                      questions: {
-                        create: generatedNotes.mcqs.map((mcq, index) => ({
-                          question: mcq.question,
-                          type: 'MULTIPLE_CHOICE',
-                          options: mcq.options,
-                          correctAnswer: mcq.correctAnswer,
-                          explanation: mcq.explanation,
-                          position: index,
-                        })),
-                      },
-                    },
-                  },
-                }
-              : {}),
-          },
-
-          include: {
-            sections: {
-              orderBy: {
-                position: 'asc',
-              },
-            },
-
-            flashcards: {
-              orderBy: {
-                position: 'asc',
-              },
-            },
-
-            quizzes: {
-              orderBy: {
-                position: 'asc',
-              },
-
-              include: {
-                questions: {
-                  orderBy: {
-                    position: 'asc',
-                  },
-                },
-              },
-            },
-          },
-        });
-
-        const completedJob = await transaction.generationJob.update({
-          where: {
-            id: job.id,
-          },
-
-          data: {
-            status: 'COMPLETED',
-            completedAt: new Date(),
-            errorMessage: null,
-          },
-
-          select: publicGenerationJobSelect,
-        });
-
-        return {
-          job: completedJob,
-          note,
-        };
-      });
+      if (
+        !completedJob ||
+        completedJob.status !== 'COMPLETED' ||
+        !completedJob.note
+      ) {
+        throw new BadGatewayException(
+          'n8n finished without completing the generation job',
+        );
+      }
 
       return {
-        message: 'Study notes generated successfully',
-
+        message: 'Study notes generated successfully through n8n',
         automation,
-
-        structuredOutput: generatedNotes,
-
-        ...result,
+        job: completedJob,
+        note: completedJob.note,
       };
     } catch (error: unknown) {
-      await this.markJobAsFailed(job.id, error);
+      await this.markFailedIfNecessary(job.id, error);
+
       throw error;
     }
   }
 
-  private async markJobAsFailed(jobId: string, error: unknown): Promise<void> {
-    const errorMessage = this.getSafeFailureMessage(error);
+  private buildPromptSummary(request: CreateGenerationDto): string {
+    return [
+      `Topic: ${request.topic}`,
+      `Subject: ${request.subject}`,
+      `Education level: ${request.educationLevel}`,
+      `Language: ${request.language}`,
+      `Length: ${request.notesLength}`,
+      `MCQs: ${request.numberOfMcqs}`,
+      `Flashcards: ${request.numberOfFlashcards}`,
+      `Practical examples: ${request.includePracticalExamples}`,
+    ].join('\n');
+  }
+
+  private async markFailedIfNecessary(
+    jobId: string,
+    error: unknown,
+  ): Promise<void> {
+    const message =
+      error instanceof HttpException
+        ? this.extractHttpMessage(error)
+        : 'n8n generation workflow failed';
 
     try {
-      await this.prisma.generationJob.update({
+      await this.prisma.generationJob.updateMany({
         where: {
           id: jobId,
+          status: {
+            not: 'COMPLETED',
+          },
         },
-
         data: {
           status: 'FAILED',
-          errorMessage,
           completedAt: new Date(),
+          errorMessage: message.slice(0, 1000),
         },
       });
     } catch (databaseError: unknown) {
       this.logger.error(
-        `Could not mark generation job ${jobId} as failed: ${
-          databaseError instanceof Error
-            ? databaseError.message
-            : 'Unknown database error'
-        }`,
+        databaseError instanceof Error
+          ? databaseError.message
+          : 'Could not update failed generation job',
       );
     }
   }
 
-  private getSafeFailureMessage(error: unknown): string {
-    if (error instanceof HttpException) {
-      const response = error.getResponse();
+  private extractHttpMessage(error: HttpException): string {
+    const response = error.getResponse();
 
-      if (typeof response === 'string') {
-        return response.slice(0, 1000);
+    if (typeof response === 'string') {
+      return response;
+    }
+
+    if (
+      typeof response === 'object' &&
+      response !== null &&
+      'message' in response
+    ) {
+      const message = (response as { message?: unknown }).message;
+
+      if (typeof message === 'string') {
+        return message;
       }
 
-      if (
-        typeof response === 'object' &&
-        response !== null &&
-        'message' in response
-      ) {
-        const message = (
-          response as {
-            message?: unknown;
-          }
-        ).message;
-
-        if (typeof message === 'string') {
-          return message.slice(0, 1000);
-        }
-
-        if (Array.isArray(message)) {
-          return message
-            .filter((item): item is string => typeof item === 'string')
-            .join(', ')
-            .slice(0, 1000);
-        }
+      if (Array.isArray(message)) {
+        return message
+          .filter((item): item is string => typeof item === 'string')
+          .join(', ');
       }
     }
 
-    return 'AI generation failed';
+    return error.message;
   }
 }

@@ -103,6 +103,14 @@ export class N8nService {
 
       const result = responseBody as Record<string, unknown>;
 
+      if (result.status === 'FAILED') {
+        throw new BadGatewayException(
+          typeof result.message === 'string'
+            ? result.message
+            : 'n8n generation workflow failed',
+        );
+      }
+
       if (result.accepted !== true || result.jobId !== payload.jobId) {
         throw new BadGatewayException(
           'n8n did not acknowledge the correct generation job',
@@ -115,15 +123,14 @@ export class N8nService {
         message:
           typeof result.message === 'string'
             ? result.message
-            : 'Generation request accepted by n8n',
+            : 'Generation workflow completed',
         jobId: payload.jobId,
         requestId:
           typeof result.requestId === 'string'
             ? result.requestId
             : payload.requestId,
-        event: typeof result.event === 'string' ? result.event : payload.event,
-        receivedAt:
-          typeof result.receivedAt === 'string' ? result.receivedAt : undefined,
+        status: result.status === 'COMPLETED' ? 'COMPLETED' : undefined,
+        noteId: typeof result.noteId === 'string' ? result.noteId : undefined,
       };
     } catch (error: unknown) {
       if (error instanceof HttpException) {

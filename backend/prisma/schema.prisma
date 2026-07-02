@@ -126,12 +126,13 @@ model NoteSection {
 }
 
 model GenerationJob {
-  id           String           @id @default(uuid())
-  topic        String
-  subject      String           @default("General")
-  prompt       String?          @db.Text
-  status       GenerationStatus @default(PENDING)
-  errorMessage String?          @db.Text
+  id                  String           @id @default(uuid())
+  topic               String
+  subject             String           @default("General")
+  prompt              String?          @db.Text
+  status              GenerationStatus @default(PENDING)
+  errorMessage        String?          @db.Text
+  automationRequestId String?          @unique
 
   educationLevel           EducationLevel     @default(UNIVERSITY)
   language                 GenerationLanguage @default(ENGLISH)

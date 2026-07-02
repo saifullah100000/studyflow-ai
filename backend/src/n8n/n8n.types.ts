@@ -24,6 +24,6 @@ export interface N8nDispatchResult {
   message: string;
   jobId: string;
   requestId?: string;
-  event?: string;
-  receivedAt?: string;
+  status?: 'COMPLETED' | 'FAILED';
+  noteId?: string;
 }
