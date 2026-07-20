@@ -10,6 +10,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
 import { ProfileModule } from './profile/profile.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { PdfModule } from './pdf/pdf.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     GenerationsModule,
     DashboardModule,
     ProfileModule,
+    PdfModule,
   ],
 
   controllers: [AppController],

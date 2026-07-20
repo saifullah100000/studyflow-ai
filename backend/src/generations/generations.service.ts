@@ -1,6 +1,7 @@
 import {
   BadGatewayException,
   HttpException,
+  HttpStatus,
   Injectable,
   Logger,
 } from '@nestjs/common';
@@ -30,7 +31,8 @@ export class GenerationsService {
         notesLength: createGenerationDto.notesLength,
         numberOfMcqs: createGenerationDto.numberOfMcqs,
         numberOfFlashcards: createGenerationDto.numberOfFlashcards,
-        includePracticalExamples: createGenerationDto.includePracticalExamples,
+        includePracticalExamples:
+          createGenerationDto.includePracticalExamples,
         sendToWhatsapp: createGenerationDto.sendToWhatsapp,
         status: 'PENDING',
         userId,
@@ -96,7 +98,13 @@ export class GenerationsService {
         note: completedJob.note,
       };
     } catch (error: unknown) {
-      await this.markFailedIfNecessary(job.id, error);
+      const isLocalTimeout =
+        error instanceof HttpException &&
+        error.getStatus() === HttpStatus.GATEWAY_TIMEOUT;
+
+      if (!isLocalTimeout) {
+        await this.markFailedIfNecessary(job.id, error);
+      }
 
       throw error;
     }

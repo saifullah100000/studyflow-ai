@@ -32,15 +32,16 @@ export class N8nService {
       : '';
 
     const configuredTimeout = Number(
-      this.configService.get<string>('N8N_TIMEOUT_MS') ?? 10000,
-    );
+  this.configService.get<string>('N8N_TIMEOUT_MS') ??
+    180000,
+);
 
-    this.timeoutMs =
-      Number.isInteger(configuredTimeout) &&
-      configuredTimeout >= 1000 &&
-      configuredTimeout <= 60000
-        ? configuredTimeout
-        : 10000;
+this.timeoutMs =
+  Number.isInteger(configuredTimeout) &&
+  configuredTimeout >= 1000 &&
+  configuredTimeout <= 300000
+    ? configuredTimeout
+    : 180000;
   }
 
   async sendGenerationRequest(

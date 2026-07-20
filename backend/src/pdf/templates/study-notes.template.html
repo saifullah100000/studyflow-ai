@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="{{languageCode}}" dir="{{textDirection}}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{title}} | StudyFlow AI</title>
+    <style>
+      @page { size: A4; margin: 22mm 16mm 20mm; }
+
+      :root {
+        --ink: #172033;
+        --muted: #5d6980;
+        --line: #dfe5ef;
+        --canvas: #f5f7fb;
+        --brand: #4f46e5;
+        --brand-dark: #312e81;
+        --brand-soft: #eef2ff;
+        --success-soft: #ecfdf5;
+        --warm-soft: #fff7ed;
+      }
+
+      * { box-sizing: border-box; }
+      html { color: var(--ink); font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; line-height: 1.6; }
+      body { margin: 0; background: var(--canvas); }
+      h1, h2, h3, p { margin-top: 0; }
+      h1, h2, h3 { color: var(--ink); line-height: 1.2; }
+      h1 { font-size: 30pt; letter-spacing: -0.03em; }
+      h2 { font-size: 20pt; margin-bottom: 14px; }
+      h3 { font-size: 13pt; margin-bottom: 7px; }
+      a { color: inherit; text-decoration: none; }
+
+      .page { position: relative; min-height: 255mm; padding-bottom: 16mm; }
+      .page-break { break-before: page; page-break-before: always; }
+      .avoid-break { break-inside: avoid; page-break-inside: avoid; }
+      .kicker { color: var(--brand); font-size: 8.5pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+      .muted { color: var(--muted); }
+
+
+      .cover {
+        display: flex;
+        min-height: 255mm;
+        flex-direction: column;
+        justify-content: space-between;
+        overflow: hidden;
+        padding: 20mm;
+        color: #fff;
+        background: linear-gradient(145deg, #312e81 0%, #4f46e5 52%, #7c3aed 100%);
+      }
+      .cover h1 { max-width: 140mm; margin: 16mm 0 12mm; color: #fff; font-size: 38pt; }
+      .cover-copy { max-width: 120mm; color: #e0e7ff; font-size: 13pt; }
+      .cover-label { display: inline-block; padding: 6px 11px; border: 1px solid rgba(255, 255, 255, 0.32); border-radius: 999px; color: #eef2ff; font-size: 9pt; font-weight: 700; }
+      .cover-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-width: 140mm; }
+      .cover-meta-item { padding: 14px; border-radius: 10px; background: rgba(255, 255, 255, 0.1); }
+      .cover-meta-item span { display: block; color: #c7d2fe; font-size: 8pt; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+      .cover-meta-item strong { display: block; margin-top: 4px; font-size: 12pt; }
+
+      .toc { padding: 4mm 0; }
+      .toc-intro { max-width: 130mm; margin-bottom: 22px; color: var(--muted); }
+      .toc-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+      .toc-list li { display: flex; align-items: baseline; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+      .toc-label { font-weight: 700; }
+      .toc-dots { flex: 1; border-bottom: 1px dotted #aab4c5; }
+      .toc-page { color: var(--muted); font-size: 9pt; }
+
+      .section { padding: 4mm 0; }
+      .section-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 19px; }
+      .section-number { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 8px; color: var(--brand); background: var(--brand-soft); font-size: 10pt; font-weight: 800; }
+      .lead { max-width: 150mm; color: var(--muted); font-size: 11pt; }
+      .objective-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+      .objective { display: flex; gap: 10px; padding: 13px; border: 1px solid #c7d2fe; border-radius: 10px; background: var(--brand-soft); }
+      .objective-number { flex: 0 0 22px; height: 22px; border-radius: 50%; color: #fff; background: var(--brand); font-size: 8.5pt; font-weight: 700; line-height: 22px; text-align: center; }
+
+      .note-section { margin-top: 21px; }
+      .note-section p { white-space: pre-line; }
+      .example { margin: 18px 0; padding: 15px; border-left: 4px solid #f59e0b; border-radius: 0 10px 10px 0; background: var(--warm-soft); }
+      .example-label { margin-bottom: 5px; color: #a16207; font-size: 8pt; font-weight: 800; letter-spacing: 0.11em; text-transform: uppercase; }
+      .summary { padding: 18px; border-radius: 12px; color: #eef2ff; background: var(--brand-dark); }
+      .summary h2 { color: #fff; }
+      .summary p { margin-bottom: 0; }
+
+      .mcq { margin: 14px 0; padding: 15px; border: 1px solid var(--line); border-radius: 11px; background: #fff; }
+      .mcq-question { margin-bottom: 11px; font-weight: 700; }
+      .option { display: flex; gap: 9px; margin: 7px 0; padding: 8px 10px; border-radius: 7px; background: #f8fafc; }
+      .option-label { color: var(--brand); font-weight: 800; }
+      .answer { margin-top: 11px; padding: 10px; border-radius: 7px; color: #14532d; background: var(--success-soft); font-size: 9.5pt; }
+      .answer strong { display: block; margin-bottom: 2px; }
+
+      .flashcard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+      .flashcard { min-height: 74mm; padding: 16px; border: 1px solid #ddd6fe; border-radius: 12px; background: linear-gradient(145deg, #fff 0%, #f5f3ff 100%); }
+      .flashcard-side { margin-bottom: 7px; color: #7c3aed; font-size: 8pt; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+      .flashcard-answer { margin-top: 16px; padding-top: 12px; border-top: 1px solid #ddd6fe; color: var(--muted); }
+
+      @media print {
+        body { background: #fff; }
+        .page { min-height: auto; }
+        .cover { min-height: 255mm; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="cover page">
+        <div>
+          <span class="cover-label">StudyFlow AI - Generated study guide</span>
+          <p class="kicker" style="color: #c7d2fe; margin-top: 22mm;">{{subject}}</p>
+          <h1>{{title}}</h1>
+          {{#if introduction}}<p class="cover-copy">{{introduction}}</p>{{/if}}
+        </div>
+        <div class="cover-meta">
+          <div class="cover-meta-item"><span>Study topic</span><strong>{{topic}}</strong></div>
+          <div class="cover-meta-item"><span>Student level</span><strong>{{studentLevel}}</strong></div>
+          <div class="cover-meta-item"><span>Language</span><strong>{{language}}</strong></div>
+          <div class="cover-meta-item"><span>Prepared for</span><strong>{{studentName}}</strong></div>
+        </div>
+      </section>
+
+      <section class="page page-break toc">
+        <p class="kicker">Navigate your guide</p>
+        <h2>Table of contents</h2>
+        <p class="toc-intro">Use this guide as a focused revision companion: understand the ideas, see them in context, and test your recall.</p>
+        <ol class="toc-list">
+          <li><span class="toc-label">Learning objectives</span><span class="toc-dots"></span><span class="toc-page">03</span></li>
+          <li><span class="toc-label">Explanations</span><span class="toc-dots"></span><span class="toc-page">04</span></li>
+          {{#if examples}}<li><span class="toc-label">Examples</span><span class="toc-dots"></span><span class="toc-page">05</span></li>{{/if}}
+          <li><span class="toc-label">Summary</span><span class="toc-dots"></span><span class="toc-page">06</span></li>
+          {{#if mcqs}}<li><span class="toc-label">Knowledge check: MCQs</span><span class="toc-dots"></span><span class="toc-page">07</span></li>{{/if}}
+          {{#if flashcards}}<li><span class="toc-label">Flashcards</span><span class="toc-dots"></span><span class="toc-page">08</span></li>{{/if}}
+        </ol>
+      </section>
+
+      <section class="page page-break section">
+        <div class="section-heading"><span class="section-number">01</span><div><p class="kicker">Focus your revision</p><h2>Learning objectives</h2></div></div>
+        <p class="lead">By the end of this guide, you should be able to:</p>
+        <div class="objective-grid">{{#each objectives}}<div class="objective avoid-break"><span class="objective-number">{{add @index 1}}</span><span>{{this}}</span></div>{{/each}}</div>
+      </section>
+
+      <section class="page page-break section">
+        <div class="section-heading"><span class="section-number">02</span><div><p class="kicker">Build understanding</p><h2>Explanations</h2></div></div>
+        {{#each sections}}<article class="note-section avoid-break"><h3>{{heading}}</h3><p>{{content}}</p></article>{{/each}}
+      </section>
+
+      {{#if examples}}<section class="page page-break section">
+        <div class="section-heading"><span class="section-number">03</span><div><p class="kicker">See it in action</p><h2>Examples</h2></div></div>
+        {{#each examples}}<article class="example avoid-break"><p class="example-label">Worked example{{#if title}}: {{title}}{{/if}}</p><h3>{{heading}}</h3><p>{{content}}</p></article>{{/each}}
+      </section>{{/if}}
+
+      <section class="page page-break section">
+        <div class="summary"><p class="kicker" style="color: #c4b5fd;">Remember this</p><h2>Summary</h2><p>{{summary}}</p></div>
+      </section>
+
+      {{#if mcqs}}<section class="page page-break section">
+        <div class="section-heading"><span class="section-number">04</span><div><p class="kicker">Check your understanding</p><h2>Multiple-choice questions</h2></div></div>
+        {{#each mcqs}}<article class="mcq avoid-break"><p class="mcq-question">{{add @index 1}}. {{question}}</p>{{#each options}}<div class="option"><span class="option-label">{{letter @index}}.</span><span>{{this}}</span></div>{{/each}}<div class="answer"><strong>Correct answer: {{correctAnswer}}</strong>{{#if explanation}}<span>{{explanation}}</span>{{/if}}</div></article>{{/each}}
+      </section>{{/if}}
+
+      {{#if flashcards}}<section class="page page-break section">
+        <div class="section-heading"><span class="section-number">05</span><div><p class="kicker">Strengthen recall</p><h2>Flashcards</h2></div></div>
+        <div class="flashcard-grid">{{#each flashcards}}<article class="flashcard avoid-break"><p class="flashcard-side">Question</p><h3>{{front}}</h3><div class="flashcard-answer"><p class="flashcard-side">Answer</p><p>{{back}}</p></div></article>{{/each}}</div>
+      </section>{{/if}}
+    </main>
+  </body>
+</html>

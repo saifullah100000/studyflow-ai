@@ -11,19 +11,25 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { ListNotesQueryDto } from './dto/list-notes-query.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
 import { NotesService } from './notes.service';
+import { PdfService } from '../pdf/pdf.service';
 
 @Controller('notes')
 @UseGuards(JwtAuthGuard)
 export class NotesController {
-  constructor(private readonly notesService: NotesService) {}
+  constructor(
+    private readonly notesService: NotesService,
+    private readonly pdfService: PdfService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -32,6 +38,24 @@ export class NotesController {
     @Body() createNoteDto: CreateNoteDto,
   ) {
     return this.notesService.create(request.user.sub, createNoteDto);
+  }
+
+  @Post(':id/generate-pdf')
+  async generatePdf(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) noteId: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    const pdf = await this.pdfService.generateForNote(request.user.sub, noteId);
+
+    response
+      .status(HttpStatus.OK)
+      .set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${pdf.filename}"`,
+        'Content-Length': String(pdf.buffer.byteLength),
+      })
+      .send(Buffer.from(pdf.buffer));
   }
 
   @Get()
